@@ -1,0 +1,484 @@
+#!/bin/bash
+#
+# Title:      PSAutomate
+# Based On:   PGBlitz (Reference Title File)
+# Original Author(s):  Admin9705 - Deiteq
+# PSAutomate Auther: fattylewis
+# URL:        https://psautomate.io - http://github.psautomate.io
+# GNU:        General Public License v3.0
+################################################################################
+runningcheck () {
+  initial2
+  runcheck5=$(docker ps | grep ${program_var})
+  if [ "$runcheck5" != "" ]; then running=1; else running=0; fi
+}
+
+initial () {
+  rm -rf /var/psautomate/psavault.output 1>/dev/null 2>&1
+  rm -rf /var/psautomate/psavault.buildup 1>/dev/null 2>&1
+  rm -rf /var/psautomate/program.temp 1>/dev/null 2>&1
+  rm -rf /var/psautomate/app.list 1>/dev/null 2>&1
+  rm -rf /var/psautomate/psavault.output 1>/dev/null 2>&1
+  touch /var/psautomate/psavault.output
+  touch /var/psautomate/program.temp
+  touch /var/psautomate/app.list
+  touch /var/psautomate/psavault.buildup
+  touch /var/psautomate/psavault.output
+  touch /var/psautomate/rclone.size
+  space=$(cat /var/psautomate/data.location)
+  # To Get Used Space
+  used=$(df -h /opt/appdata/psautomate | tail -n +2 | awk '{print $3}')
+  # To Get All Space
+  capacity=$(df -h /opt/appdata/psautomate | tail -n +2 | awk '{print $2}')
+  # Percentage
+  percentage=$(df -h /opt/appdata/psautomate | tail -n +2 | awk '{print $5}')
+}
+
+initial2 () {
+  path=$(cat /var/psautomate/server.hd.path)
+  tarlocation=$(cat /var/psautomate/data.location)
+  program_size=$(cat /var/psautomate/rclone.size)
+  program_var=$(cat /tmp/program_var)
+  server_id=wordpress
+}
+
+final () {
+  echo
+  read -p '✅ Process Complete! | PRESS [ENTER] ' typed < /dev/tty
+  bash /opt/psapress/pressmain.sh
+  exit
+}
+
+queued () {
+  echo
+  read -p '⛔️ ERROR - APP Already Queued! | Press [ENTER] ' typed < /dev/tty
+}
+
+#not used yet
+rclonelist () {
+  ls -l  /mnt/gdrive/psautomate/backup | grep "^d" | awk '{print $9}' > psavault.serverlist
+}
+
+psaboxrecall () {
+  ls -p /opt/psautomate/containers | grep -v / > /var/psautomate/psavault.apprecall
+  while read p; do
+    sed -i "/^$p\b/Id" /var/psautomate/psavault.apprecall
+  done </opt/psautomate/menu/psavault/exempt.list
+
+  while read p; do
+    sed -i "/^$p\b/Id" /var/psautomate/psavault.apprecall
+    basename "$p" .yml >> /var/psautomate/psavault.apprecall
+  done </var/psautomate/psavault.apprecall
+}
+
+mathprime () {
+  ### List Out Apps In Readable Order (One's Not Installed)
+  num=0
+  rm -rf /var/psautomate/program.temp 1>/dev/null 2>&1
+  while read p; do
+    echo -n $p >> /var/psautomate/program.temp
+    echo -n " " >> /var/psautomate/program.temp
+    num=$[num+1]
+    if [ "$num" == 7 ]; then
+      num=0
+      echo " " >> /var/psautomate/program.temp
+    fi
+  done </var/psautomate/psavault.apprecall
+}
+
+################################################ FOR BACKUP - START
+apprecall () {
+  tree -d -L 1 /opt/appdata/wordpress | awk '{print $2}' | tail -n +2 | head -n -2 > /var/psautomate/psavault.apprecall
+  ### Blank Out Temp List
+  rm -rf /var/psautomate/program.temp && touch /var/psautomate/program.temp
+  mathprime
+}
+
+buildup () {
+  echo "$typed" >> /var/psautomate/psavault.buildup
+  sed -i "/^$typed\b/Id" /var/psautomate/psavault.apprecall
+
+  num=0
+  rm -rf /var/psautomate/psavault.output 1>/dev/null 2>&1
+  while read p; do
+  echo -n $p >> /var/psautomate/psavault.output
+  echo -n " " >> /var/psautomate/psavault.output
+  if [ "$num" == 7 ]; then
+    num=0
+    echo " " >> /var/psautomate/psavault.output
+  fi
+  done </var/psautomate/psavault.buildup
+
+  mathprime
+  vaultbackup
+}
+
+buildup2 () {
+  echo "$typed" >> /var/psautomate/psavault.buildup
+  sed -i "/^$typed\b/Id" /var/psautomate/psavault.apprecall
+
+  num=0
+  rm -rf /var/psautomate/psavault.output 1>/dev/null 2>&1
+  while read p; do
+  echo -n $p >> /var/psautomate/psavault.output
+  echo -n " " >> /var/psautomate/psavault.output
+  if [ "$num" == 7 ]; then
+    num=0
+    echo " " >> /var/psautomate/psavault.output
+  fi
+  done </var/psautomate/psavault.buildup
+
+  mathprime
+  vaultrestore
+}
+################################################ FOR RESTORE - START
+
+################################################ FOR RESTORE - END
+
+
+######################################################## START - PSA Vault Backup
+backup_start () {
+  while read p; do
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PG Vault - Backing Up: $p
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+  sleep 2.5
+
+  # Store Used Program
+  echo $p > /tmp/program_var
+  # Execute Main Program
+  backup_process
+
+  sleep 2
+  done </var/psautomate/psavault.buildup
+  final
+}
+
+backup_process () {
+initial2
+
+runningcheck
+if [ "$running" == "1" ]; then
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  Stopping Docker Container - $program_var
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+sleep 1
+docker stop $program_var/mysql 1>/dev/null 2>&1
+docker stop $program_var 1>/dev/null 2>&1
+
+fi
+
+###### Start the Backup Process - Backup Locally First
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  Zipping Data Locally - $program_var
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+path=$(cat /var/psautomate/server.hd.path)
+tarlocation=$(cat /var/psautomate/data.location)
+server_id=wordpress
+
+tar \
+  --warning=no-file-changed --ignore-failed-read --absolute-names --warning=no-file-removed \
+  -C /opt/appdata/wordpress/${program_var} -cvf /opt/appdata/psautomate/${program_var}.tar ./
+
+##### Restart Docker Application if was Running Prior
+if [ "$running" == "1" ]; then
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  Restarting Docker Application - $program_var
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+sleep 2
+docker restart $program_var/mysql 1>/dev/null 2>&1
+sleep 2
+docker restart $program_var 1>/dev/null 2>&1; fi
+
+###### Backing Up Files to GDrive
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  Sending Zipped Data to Google Drive - $program_var
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+rclone --config /opt/appdata/psautomate/rclone.conf mkdir gdrive:/psautomate/backup/${server_id} 1>/dev/null 2>&1
+
+rclone --config /opt/appdata/psautomate/rclone.conf \
+--stats-one-line --stats 1s --progress \
+moveto ${tarlocation}/${program_var}.tar \
+gdrive:/psautomate/backup/wordpress/${program_var}.tar \
+-v --checksum --drive-chunk-size=64M --transfers=8
+
+##### Remove File Incase
+rm -rf ${tarlocation}/${program_var}.tar 1>/dev/null 2>&1
+}
+######################################################## END - PG Vault Backup
+#
+##################################################### START - PG Vault Restore
+restore_start () {
+
+while read p; do
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PSA Vault - Restoring: $p
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+sleep 2.5
+
+# Store Used Program
+echo $p > /tmp/program_var
+# Execute Main Program
+restore_process
+
+sleep 2
+done </var/psautomate/psavault.buildup
+final
+}
+
+restore_process () {
+initial2
+srecall=$(cat /tmp/server.select)
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  Determining Initial File Size - $program_var
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+size=$(du -sh --apparent-size /mnt/gdrive/psautomate/backup/wordpress/${program_var}.tar | /usr/bin/awk '{print $1}')
+sleep 2
+echo "Initial File Size: $size"
+sleep 2
+
+###### Backing Up Files to GDrive
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  Downloading Data From Google Drive - $program_var
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+rclone --config /opt/appdata/psautomate/rclone.conf --stats-one-line \
+--stats 1s --progress \
+copy gdrive:/psautomate/backup/wordpress/${program_var}.tar \
+${tarlocation} \
+-v --checksum --drive-chunk-size=64M --transfers=8
+
+##### Stop Docker Container if Running
+runningcheck
+if [ "$running" == "1" ]; then
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  Removing Docker Containers (If Exists) - $program_var
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+sleep 1
+docker stop $program_var/mysql 1>/dev/null 2>&1
+docker stop $program_var 1>/dev/null 2>&1
+docker rm $program_var/mysql 1>/dev/null 2>&1
+docker rm $program_var 1>/dev/null 2>&1
+fi
+
+###### Start the Backup Process - Backup Locally First
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  UnZipping & Restoring Data - $program_var
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+mkdir -p "/opt/appdata/wordpress/${program_var}"
+rm -rf "/opt/appdata/wordpress/${program_var}/*"
+chown -R 1000:1000 "/opt/appdata/wordpress/${program_var}"
+chmod -R 775 "/opt/appdata/wordpress/${program_var}"
+tar -C /opt/appdata/wordpress/${program_var} -xvf ${tarlocation}/${program_var}.tar
+chown -R 1000:1000 "/opt/appdata/wordpress/${program_var}"
+chmod -R 775 "/opt/appdata/wordpress/${program_var}"
+
+##### Restart Docker Application if was Running Prior
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  Deploying WordPress Sites (For You) - $program_var
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+sleep 1
+
+echo "$program_var" > /tmp/wp_id
+
+ansible-playbook /opt/psapress/db.yml
+ansible-playbook /opt/psapress/wordpress.yml
+
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️  Holding for 5 Seconds!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+sleep 5
+docker restart wp-$program_var/mysql
+
+wpdomain=$(cat /var/psautomate/server.domain)
+
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 Site Deployed! Visit - $program_var.$wpdomain
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EOF
+
+##### Remove File Incase
+rm -rf ${tarlocation}/${program_var}.tar 1>/dev/null 2>&1
+}
+##################################################### END - PSA Vault Restore
+#
+##################################################### START - Backup Interface
+vaultbackup () {
+### List Out Apps In Readable Order (One's Not Installed)
+notrun=$(cat /var/psautomate/program.temp)
+buildup=$(cat /var/psautomate/psavault.output)
+
+if [ "$buildup" == "" ]; then buildup="NONE"; fi
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 PSA Vault ~ Data Storage /w PSA Press 📓 Reference: psapress.psautomate.io
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📂 Potential Data to Backup
+
+$notrun
+
+💾 Apps Queued for Backup
+
+$buildup
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️ Quitting? TYPE > exit | 💪 Ready to Backup? TYPE > deploy
+EOF
+read -p '🌍 Type APP for QUEUE | Press [ENTER]: ' typed < /dev/tty
+
+if [ "$typed" == "deploy" ]; then backup_start; fi
+if [ "$typed" == "exit" ]; then exit; fi
+
+current2=$(cat /var/psautomate/psavault.buildup | grep "\<$typed\>")
+if [ "$current2" != "" ]; then
+queued
+vaultbackup; fi
+
+cat /var/psautomate/psavault.buildup > /tmp/appcheck.5
+cat /var/psautomate/psavault.apprecall >> /tmp/appcheck.5
+current1=$(cat /tmp/appcheck.5 | grep "\<$typed\>")
+if [ "$current1" == "" ]; then badinput && vaultbackup; fi
+
+buildup
+}
+##################################################### END - Backup Interface
+#
+##################################################### START - Restore Interface
+vaultrestore () {
+notrun=$(cat /var/psautomate/program.temp)
+buildup=$(cat /var/psautomate/psavault.output)
+
+if [ "$buildup" == "" ]; then buildup="NONE"; fi
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 PSA Vault ~ Data Recall /w PG Press  📓 Reference: psapress.psautomate.io
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📂 Potential Data to Restore
+
+$notrun
+
+💾 Apps Queued for Backup
+
+$buildup
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↘️ Quitting? TYPE > exit | 💪 Ready to Backup? TYPE > deploy
+EOF
+read -p '🌍 Type APP for QUEUE | Press [ENTER]: ' typed < /dev/tty
+
+if [ "$typed" == "deploy" ]; then restore_start; fi
+if [ "$typed" == "exit" ]; then exit; fi
+
+current2=$(cat /var/psautomate/psavault.buildup | grep "\<$typed\>")
+if [ "$current2" != "" ]; then
+queued
+vaultrestore; fi
+
+cat /var/psautomate/psavault.buildup > /tmp/appcheck.5
+cat /var/psautomate/psavault.apprecall >> /tmp/appcheck.5
+current1=$(cat /tmp/appcheck.5 | grep "\<$typed\>")
+if [ "$current1" == "" ]; then badinput && vaultrestore; fi
+
+buildup2
+}
+
+serverprime () {
+  echo wordpress > /tmp/server.select
+
+  ls -l  /mnt/gdrive/psautomate/backup/wordpress | awk '{print $9}' | tail -n +2 > /var/psautomate/psavault.restoreapps
+
+  ### Blank Out Temp List
+  rm -rf /var/psautomate/psavault.apprecall 1>/dev/null 2>&1
+  touch /var/psautomate/psavault.apprecall
+
+  while read p; do
+    basename "$p" .tar >> /var/psautomate/psavault.apprecall
+  done </var/psautomate/psavault.restoreapps
+
+  ### Blank Out Temp List
+  rm -rf /var/psautomate/program.temp 1>/dev/null 2>&1
+  touch /var/psautomate/program.temp
+  mathprime
+}
+
+##################################################### START Primary Interface
+primaryinterface () {
+  initial2
+tee <<-EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📁  PSA Vault for PSA Press              📓 Reference: psapress.psautomate.io
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[1] Data Backup
+[2] Data Restore
+[Z] Exit
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+  read -p 'Type a Number | Press [ENTER]: ' typed < /dev/tty
+
+    if [ "$typed" == "1" ]; then
+    vaultbackup
+    primaryinterface
+  elif [ "$typed" == "2" ]; then
+    serverprime
+    vaultrestore
+    primaryinterface
+  elif [[ "$typed" == "Z" || "$typed" == "z" ]]; then
+    exit
+  else
+    badinput
+    primaryinterface
+  fi
+}
+##################################################### END Primary Interface

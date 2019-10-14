@@ -1,0 +1,85 @@
+#!/bin/bash
+#
+# Title:      PSAutomate
+# Based On:   PGBlitz (Reference Title File)
+# Original Author(s):  Admin9705 - Deiteq
+# PSAutomate Auther: fattylewis
+# URL:        https://psautomate.io - http://github.psautomate.io
+# GNU:        General Public License v3.0
+################################################################################
+---
+- hosts: localhost
+  gather_facts: false
+  tasks:
+
+    # WP CORE (MANDATORY) #########################################################
+    - name: 'Including PSA Press Core'
+      include_tasks: '/opt/psapress/psapresscore.yml'
+
+    # FACTS #######################################################################
+    - name: 'Set Known Facts'
+      set_fact:
+        pgrole: 'wp-{{wp_id.stdout}}'
+        intport: '80'
+        extport: '80'
+        image: 'wordpress'
+
+    # CORE (MANDATORY) ############################################################
+    - name: 'Register TLD'
+      shell: 'cat /var/psautomate/tld.program'
+      register: toplevel
+
+    - name: Register Domain
+      shell: 'cat /var/psautomate/server.domain'
+      register: domain
+
+    - name: 'If Fact Matches - Enable TLD'
+      set_fact:
+        tldset: '{{domain.stdout}}'
+      when: 'toplevel.stdout == wp_id.stdout'
+
+    - name: 'If Fact Does Not Match - Ignore TLD'
+      set_fact:
+        tldset: ''
+      when: 'not toplevel.stdout == wp_id.stdout'
+
+    # LABELS ######################################################################
+    - name: 'Adding Traefik'
+      set_fact:
+        psa_labels:
+          traefik.enable: 'true'
+          traefik.backend: "{{psarole}}"
+          traefik.port: '80'
+          traefik.frontend.rule: 'Host:{{wp_id.stdout}}.{{domain.stdout}},{{tldset}}'
+          traefik.docker.network: 'psautomate'
+
+    - name: 'Setting PSA Volumes'
+      set_fact:
+        psa_volumes:
+          - /opt/appdata/wordpress/{{wp_id.stdout}}/{{wp_id.stdout}}:/var/www/html
+          - /etc/localtime:/etc/localtime:ro
+
+    - name: 'Setting PSA ENV'
+      set_fact:
+        psa_env:
+          PUID: 1000
+          PGID: 1000
+          WORDPRESS_DB_PASSWORD: "mYsupERbigPas2WorD"
+
+    # MAIN DEPLOYMENT #############################################################
+    - name: 'Deploying {{psarole}}'
+      docker_container:
+        name: '{{psarole}}'
+        image: '{{image}}'
+        pull: yes
+        links:
+          - "wpdb-{{wp_id.stdout}}:mysql"
+        volumes: '{{psa_volumes}}'
+        env: '{{psa_env}}'
+        restart_policy: unless-stopped
+        networks:
+          - name: psautomate
+            aliases:
+              - "wp-{{wp_id.stdout}}"
+        state: started
+        labels: '{{psa_labels}}'
